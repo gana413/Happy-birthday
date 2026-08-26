@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Happy Birthday Kusuma!</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- MediaPipe Hands & Drawing Utilities -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <style>
+    /* Neon Text Glow Effect */
+    .glow-pink {
+      text-shadow: 0 0 10px #ff1493, 0 0 20px #ff1493, 0 0 40px #ff007f, 0 0 70px #ff007f;
+    }
+    .glow-gold {
+      text-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700, 0 0 40px #ffaa00;
+    }
+    /* Mirror the camera elements */
+    #webcam, #output-canvas {
+      transform: scaleX(-1);
+    }
+  </style>
+</head>
+<body class="bg-black text-white overflow-hidden select-none font-sans m-0 p-0">
+
+  <div class="relative w-screen h-screen flex items-center justify-center bg-black">
+    
+    <!-- Hidden Raw Camera Video -->
+    <video id="webcam" class="hidden" playsinline autoplay muted></video>
+
+    <!-- Canvas for Video Stream & Hand Skeleton Tracking -->
+    <canvas id="output-canvas" class="absolute inset-0 w-full h-full object-cover z-0"></canvas>
+
+    <!-- Guide Header -->
+    <div id="instructions" class="absolute top-6 left-1/2 -translate-x-1/2 z-20 bg-black/70 backdrop-blur-md px-6 py-3 rounded-full border border-pink-500/40 text-center shadow-xl">
+      <p class="text-sm md:text-base font-bold text-pink-300">
+        ✨ 2 చేతులను కెమెరా ముందు ఉంచి దూరం జరపండి ✨
+      </p>
+    </div>
+
+    <!-- Dynamic Overlay Birthday Text -->
+    <div id="text-container" class="absolute z-10 pointer-events-none flex flex-col items-center justify-center opacity-0 transition-opacity duration-150">
+      <h1 id="bday-main-text" class="glow-pink font-black tracking-wider text-center text-pink-400 whitespace-nowrap">
+        🎉 HAPPY BIRTHDAY 🎉
+      </h1>
+      <h2 id="bday-name-text" class="glow-gold font-extrabold tracking-widest text-center text-yellow-300 whitespace-nowrap mt-1">
+        KUSUMA ❤️
+      </h2>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loading" class="absolute z-30 flex flex-col items-center gap-3">
+      <div class="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+      <p class="text-pink-300 font-medium tracking-wide">AI హ్యాండ్ ట్రాకర్ లోడ్ అవుతోంది...</p>
+    </div>
+
+  </div>
+
+  <script>
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('output-canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const textContainer = document.getElementById('text-container');
+    const bdayMainText = document.getElementById('bday-main-text');
+    const bdayNameText = document.getElementById('bday-name-text');
+    const loadingElement = document.getElementById('loading');
+
+    let confettiTriggered = false;
+    let isProcessing = false;
+
+    // Set canvas dimensions dynamically
+    function resizeCanvas() {
+      canvasElement.width = window.innerWidth;
+      canvasElement.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Trigger birthday confetti explosion
+    function shootConfetti() {
+      confetti({
+        particleCount: 100,
+        spread: 120,
+        origin: { y: 0.6 }
+      });
+    }
+
+    // Process Hand Tracking Results
+    function onResults(results) {
+      if (loadingElement.style.display !== 'none') {
+        loadingElement.style.display = 'none';
+      }
+
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      // Render the camera video frame
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        // Draw Hand Skeleton Dots & Connections for each detected hand
+        for (const landmarks of results.multiHandLandmarks) {
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {
+            color: '#00FFCC',
+            lineWidth: 3
+          });
+          drawLandmarks(canvasCtx, landmarks, {
+            color: '#FF0055',
+            fillColor: '#FFFFFF',
+            lineWidth: 2,
+            radius: 4
+          });
+        }
+
+        // When 2 hands are detected, scale and position the text
+        if (results.multiHandLandmarks.length >= 2) {
+          const hand1 = results.multiHandLandmarks[0];
+          const hand2 = results.multiHandLandmarks[1];
+
+          // Use Middle Finger MCP (Center point)
+          const p1 = hand1[9];
+          const p2 = hand2[9];
+
+          // Map mirrored screen coordinates
+          const x1 = (1 - p1.x) * window.innerWidth;
+          const y1 = p1.y * window.innerHeight;
+          const x2 = (1 - p2.x) * window.innerWidth;
+          const y2 = p2.y * window.innerHeight;
+
+          // Euclidean distance between hands
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          // Midpoint between hands
+          const midX = (x1 + x2) / 2;
+          const midY = (y1 + y2) / 2;
+
+          // Dynamic text size scaling
+          const baseSize = Math.max(20, Math.min(distance * 0.16, 110));
+          const nameSize = baseSize * 0.75;
+
+          textContainer.style.left = `${midX}px`;
+          textContainer.style.top = `${midY}px`;
+          textContainer.style.transform = `translate(-50%, -50%)`;
+          textContainer.style.opacity = '1';
+
+          bdayMainText.style.fontSize = `${baseSize}px`;
+          bdayNameText.style.fontSize = `${nameSize}px`;
+
+          // Trigger confetti if hands are spread wide
+          if (distance > window.innerWidth * 0.45 && !confettiTriggered) {
+            shootConfetti();
+            confettiTriggered = true;
+            setTimeout(() => { confettiTriggered = false; }, 2000);
+          }
+        } else {
+          textContainer.style.opacity = '0';
+        }
+      } else {
+        textContainer.style.opacity = '0';
+      }
+
+      canvasCtx.restore();
+    }
+
+    // Initialize High-Performance Lightweight Hand Tracking Model
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 0, // Lite model for Zero Lag
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    hands.onResults(onResults);
+
+    // Optimized Camera Stream Setup using direct getUserMedia & requestVideoFrameCallback
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: 'user',
+            frameRate: { ideal: 30, max: 30 }
+          },
+          audio: false
+        });
+
+        videoElement.srcObject = stream;
+        await videoElement.play();
+
+        async function processFrame() {
+          if (!isProcessing && videoElement.readyState >= 2) {
+            isProcessing = true;
+            await hands.send({ image: videoElement });
+            isProcessing = false;
+          }
+          requestAnimationFrame(processFrame);
+        }
+
+        requestAnimationFrame(processFrame);
+      } catch (err) {
+        console.error("Camera Init Error:", err);
+        loadingElement.innerHTML = `<p class="text-red-400 font-bold text-center">కెమెరా పర్మిషన్ అనుమతించండి!</p>`;
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', initCamera);
+  </script>
+</body>
+</html>
