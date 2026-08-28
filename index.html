@@ -1,281 +1,423 @@
 <!DOCTYPE html>
 <html lang="te">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FIZONYX - Digital Raksha Bandhan Vision</title>
-    <!-- Tailwind CSS for UI -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- MediaPipe Hands -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    <!-- Canvas Confetti -->
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    <style>
-        body {
-            background-color: #0d1117;
-            color: #f0f6fc;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
-        }
-        .mirror-mode {
-            transform: scaleX(-1);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FIZONYX Live P2P Digital Raksha Bandhan</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PeerJS for Real-time WebRTC P2P Video & Data -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- MediaPipe Hands & Drawing Utilities -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <style>
+    .mirror {
+      transform: scaleX(-1);
+    }
+    .glow-gold {
+      text-shadow: 0 0 10px #ffd700, 0 0 20px #ffaa00, 0 0 40px #ff8800;
+    }
+    .glow-cyan {
+      text-shadow: 0 0 10px #00ffff, 0 0 20px #00bfff;
+    }
+  </style>
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen p-4 relative select-none">
+<body class="bg-slate-950 text-white min-h-screen flex flex-col items-center justify-center p-0 m-0 overflow-hidden font-sans select-none">
 
-    <!-- Header Section -->
-    <div class="absolute top-4 z-20 text-center">
-        <h1 class="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-yellow-400 to-orange-500 tracking-wider">
-            రక్షాబంధన్ డిజిటల్ విజన్
-        </h1>
-        <p class="text-xs md:text-sm text-gray-300 mt-1" id="status-text">
-            కెమెరా ఆన్ చేసి చేతిని చూపించండి...
-        </p>
+  <!-- Step 1: Role & Room Selection Screen -->
+  <div id="lobby-screen" class="z-50 flex flex-col items-center justify-center w-full max-w-lg p-6 bg-slate-900/95 border border-amber-500/40 rounded-3xl shadow-2xl backdrop-blur-xl">
+    <div class="text-4xl mb-2">🪢 ✨ 🪢</div>
+    <h1 class="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-amber-300 to-red-500 text-center">
+      లైవ్ డిజిటల్ రక్షాబంధన్
+    </h1>
+    <p class="text-xs text-gray-400 mt-1 mb-6 text-center">రియల్-టైమ్ కెమెరా విజన్ & హ్యాండ్ గెస్చర్ ప్లాట్‌ఫామ్</p>
+
+    <!-- Role Switch Buttons -->
+    <div class="grid grid-cols-2 gap-3 w-full mb-6">
+      <button id="role-sister-btn" onclick="selectRole('sister')" class="py-3 px-4 rounded-2xl border-2 border-amber-400 bg-amber-500/20 font-bold text-amber-300 transition-all flex flex-col items-center gap-1">
+        <span class="text-xl">👩</span>
+        <span class="text-xs md:text-sm">రాఖీ కట్టే వారు (Sister)</span>
+      </button>
+      <button id="role-brother-btn" onclick="selectRole('brother')" class="py-3 px-4 rounded-2xl border-2 border-slate-700 bg-slate-800/40 font-bold text-gray-400 transition-all flex flex-col items-center gap-1">
+        <span class="text-xl">👦</span>
+        <span class="text-xs md:text-sm">కట్టించుకునే వారు (Brother)</span>
+      </button>
     </div>
 
-    <!-- Video & Canvas Container -->
-    <div class="relative w-full max-w-4xl h-[70vh] bg-gray-900 rounded-3xl overflow-hidden shadow-2xl border border-yellow-500/30 flex items-center justify-center">
-        <!-- Raw Video Stream -->
-        <video id="webcam" class="absolute w-full h-full object-cover mirror-mode" playsinline autoplay muted></video>
-        <!-- AR Tracking Canvas -->
-        <canvas id="output_canvas" class="absolute w-full h-full object-cover mirror-mode z-10"></canvas>
+    <!-- User Input Form -->
+    <div class="w-full space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-gray-300 mb-1">మీ పేరు</label>
+        <input type="text" id="user-name" placeholder="ఉదా: సుమ / రామ్" class="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-amber-400">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-300 mb-1">కనెక్షన్ రూమ్ కోడ్ (Secret Key)</label>
+        <input type="text" id="room-code" placeholder="ఉదా: RAKHI2026" class="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm font-mono uppercase focus:outline-none focus:border-amber-400">
+      </div>
+      <button onclick="startSession()" class="w-full py-3 mt-2 bg-gradient-to-r from-amber-500 via-orange-500 to-red-600 font-bold text-white text-sm rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all">
+        లైవ్ కనెక్షన్ ప్రారంభించండి 🚀
+      </button>
+    </div>
+  </div>
 
-        <!-- Dynamic Overlay Message -->
-        <div id="wishes-card" class="hidden absolute z-30 flex-col items-center justify-center bg-black/75 backdrop-blur-md p-6 rounded-2xl border-2 border-yellow-400 max-w-md text-center transform scale-90 transition-all duration-300">
-            <div class="text-5xl mb-2">✨ 🪢 ✨</div>
-            <h2 class="text-2xl font-bold text-yellow-400 mb-2">రక్షాబంధన్ శుభాకాంక్షలు!</h2>
-            <p class="text-gray-200 text-sm" id="custom-greeting-text">
-                సోదర సోదరీమణుల అనురాగానికి ప్రతీకగా డిజిటల్ రాఖీ విజయవంతంగా కట్టబడింది!
-            </p>
-            <button onclick="resetTieProcess()" class="mt-4 px-6 py-2 bg-gradient-to-r from-orange-500 to-red-600 rounded-full font-semibold text-white shadow-lg hover:brightness-110 active:scale-95 transition-all">
-                మళ్ళీ కట్టండి
-            </button>
-        </div>
+  <!-- Step 2: Main Live Video & Hand Tracking Canvas Interface -->
+  <div id="session-container" class="hidden relative w-screen h-screen bg-black flex items-center justify-center">
+    
+    <!-- Hidden Raw Media Capture -->
+    <video id="local-video" class="hidden" playsinline autoplay muted></video>
+    <video id="remote-video" class="hidden" playsinline autoplay></video>
+
+    <!-- Main Dynamic AR Canvas -->
+    <canvas id="output-canvas" class="absolute inset-0 w-full h-full object-cover z-0 mirror"></canvas>
+
+    <!-- Top Status Bar -->
+    <div class="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-slate-900/80 backdrop-blur-md px-6 py-2.5 rounded-full border border-amber-500/40 shadow-xl">
+      <span id="p2p-status-dot" class="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
+      <span id="session-status" class="text-xs md:text-sm font-semibold text-gray-200">మరో యూజర్ కనెక్షన్ కోసం వేచి చూస్తోంది...</span>
+      <button onclick="endSession()" class="ml-3 px-3 py-1 bg-red-600/80 hover:bg-red-500 rounded-lg text-xs font-bold transition-all">
+        ముగించండి (Exit)
+      </button>
     </div>
 
-    <!-- Bottom Controls & Instructions -->
-    <div class="mt-4 z-20 flex flex-col md:flex-row items-center gap-4 bg-gray-800/80 px-6 py-3 rounded-2xl border border-gray-700">
-        <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-full bg-yellow-400 animate-ping"></span>
-            <span class="text-xs text-gray-300 font-medium">హ్యాండ్ పోజ్: చూపుడు వేలు & బొటనవేలిని రాఖీ దగ్గరకు తెచ్చి కట్టండి (Pinch Gesture)</span>
-        </div>
-        <div class="flex gap-2">
-            <button id="start-btn" onclick="initCameraStream()" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold text-xs rounded-xl shadow-md transition-all">
-                కెమెరా ప్రారంభించండి
-            </button>
-        </div>
+    <!-- Live Instructions Overlay -->
+    <div id="gesture-hint" class="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 bg-slate-900/90 backdrop-blur-md px-6 py-2.5 rounded-2xl border border-slate-700 text-center max-w-md">
+      <p id="gesture-text" class="text-xs text-amber-300 font-medium">కెమెరా ముందు మీ చేతులను చూపించండి...</p>
     </div>
 
-    <script>
-        /**
-         * FIZONYX AR Rakhi Core Engine
-         */
-        const videoElement = document.getElementById('webcam');
-        const canvasElement = document.getElementById('output_canvas');
-        const canvasCtx = canvasElement.getContext('2d');
-        const statusText = document.getElementById('status-text');
-        const wishesCard = document.getElementById('wishes-card');
-        const startBtn = document.getElementById('start-btn');
+    <!-- Celebration Modal -->
+    <div id="wishes-modal" class="hidden absolute z-40 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-xl p-8 rounded-3xl border-2 border-amber-400 max-w-md text-center shadow-2xl scale-95 transition-transform duration-300">
+      <div class="text-6xl mb-3">🪢 💖 ✨</div>
+      <h2 class="text-2xl font-black text-amber-400 glow-gold mb-2">రక్షాబంధన్ శుభాకాంక్షలు!</h2>
+      <p id="congrats-text" class="text-sm text-gray-200 leading-relaxed mb-4"></p>
+      <div class="text-xs text-amber-200/80 bg-amber-500/10 px-4 py-2 rounded-xl border border-amber-500/20">
+        లైవ్ రూమ్ యాక్టివ్‌గా ఉంది. మీరు ముగించేవరకు వీడియో కనెక్షన్ కొనసాగుతుంది.
+      </div>
+    </div>
+  </div>
 
-        let isRakhiTied = false;
-        let isProcessing = false;
-        let audioContext = null;
+  <script>
+    /**
+     * FIZONYX High-Security Multi-Role P2P Video & Gesture Core
+     */
+    let selectedRole = 'sister';
+    let peer = null;
+    let dataConnection = null;
+    let isRakhiTied = false;
+    let isProcessing = false;
+    let sisterCurveTracker = [];
+    let audioContext = null;
 
-        // Initialize Web Audio Synthesizer for Festive Chime
-        function playCelebrationSound() {
-            try {
-                if (!audioContext) {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
-                notes.forEach((freq, index) => {
-                    const osc = audioContext.createOscillator();
-                    const gain = audioContext.createGain();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(freq, audioContext.currentTime + index * 0.12);
-                    gain.gain.setValueAtTime(0.3, audioContext.currentTime + index * 0.12);
-                    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + index * 0.12 + 0.6);
-                    osc.connect(gain);
-                    gain.connect(audioContext.destination);
-                    osc.start(audioContext.currentTime + index * 0.12);
-                    osc.stop(audioContext.currentTime + index * 0.12 + 0.6);
-                });
-            } catch (err) {
-                console.error("Audio playback error:", err);
-            }
-        }
+    const lobbyScreen = document.getElementById('lobby-screen');
+    const sessionContainer = document.getElementById('session-container');
+    const localVideo = document.getElementById('local-video');
+    const remoteVideo = document.getElementById('remote-video');
+    const canvasElement = document.getElementById('output-canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const sessionStatus = document.getElementById('session-status');
+    const statusDot = document.getElementById('p2p-status-dot');
+    const gestureText = document.getElementById('gesture-text');
+    const wishesModal = document.getElementById('wishes-modal');
+    const congratsText = document.getElementById('congrats-text');
 
-        // Draw Digital Rakhi
-        function drawRakhi(ctx, x, y, scale = 1.0, isTied = false) {
-            ctx.save();
-            ctx.translate(x, y);
+    let myName = '';
+    let partnerName = 'తోబుట్టువు';
+    let roomCode = '';
 
-            // Silk Thread (Dhaaga)
-            ctx.beginPath();
-            ctx.moveTo(-150 * scale, 0);
-            ctx.bezierCurveTo(-50 * scale, -15 * scale, 50 * scale, 15 * scale, 150 * scale, 0);
-            ctx.lineWidth = 6 * scale;
-            ctx.strokeStyle = '#dc2626'; // Red thread
-            ctx.stroke();
+    function selectRole(role) {
+      selectedRole = role;
+      const sisBtn = document.getElementById('role-sister-btn');
+      const broBtn = document.getElementById('role-brother-btn');
+      if (role === 'sister') {
+        sisBtn.className = "py-3 px-4 rounded-2xl border-2 border-amber-400 bg-amber-500/20 font-bold text-amber-300 transition-all flex flex-col items-center gap-1";
+        broBtn.className = "py-3 px-4 rounded-2xl border-2 border-slate-700 bg-slate-800/40 font-bold text-gray-400 transition-all flex flex-col items-center gap-1";
+      } else {
+        broBtn.className = "py-3 px-4 rounded-2xl border-2 border-cyan-400 bg-cyan-500/20 font-bold text-cyan-300 transition-all flex flex-col items-center gap-1";
+        sisBtn.className = "py-3 px-4 rounded-2xl border-2 border-slate-700 bg-slate-800/40 font-bold text-gray-400 transition-all flex flex-col items-center gap-1";
+      }
+    }
 
-            ctx.beginPath();
-            ctx.moveTo(-150 * scale, 0);
-            ctx.bezierCurveTo(-50 * scale, 15 * scale, 50 * scale, -15 * scale, 150 * scale, 0);
-            ctx.lineWidth = 3 * scale;
-            ctx.strokeStyle = '#facc15'; // Golden yellow sub-thread
-            ctx.stroke();
+    function resizeCanvas() {
+      canvasElement.width = window.innerWidth;
+      canvasElement.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
-            // Center Ornament (Base Ring)
-            ctx.beginPath();
-            ctx.arc(0, 0, 32 * scale, 0, 2 * Math.PI);
-            ctx.fillStyle = '#b91c1c';
-            ctx.fill();
-            ctx.lineWidth = 3 * scale;
-            ctx.strokeStyle = '#fef08a';
-            ctx.stroke();
-
-            // Decorative Floral Petals
-            const petalCount = 8;
-            for (let i = 0; i < petalCount; i++) {
-                const angle = (i * 2 * Math.PI) / petalCount;
-                const px = Math.cos(angle) * (26 * scale);
-                const py = Math.sin(angle) * (26 * scale);
-
-                ctx.beginPath();
-                ctx.arc(px, py, 9 * scale, 0, 2 * Math.PI);
-                ctx.fillStyle = '#f59e0b';
-                ctx.fill();
-                ctx.lineWidth = 1.5 * scale;
-                ctx.strokeStyle = '#ffffff';
-                ctx.stroke();
-            }
-
-            // Center Sparkling Gem
-            ctx.beginPath();
-            ctx.arc(0, 0, 16 * scale, 0, 2 * Math.PI);
-            ctx.fillStyle = isTied ? '#22c55e' : '#facc15';
-            ctx.fill();
-            ctx.lineWidth = 2 * scale;
-            ctx.strokeStyle = '#ffffff';
-            ctx.stroke();
-
-            // Center Icon Symbol (Om / Swastik / Star effect)
-            ctx.fillStyle = '#7f1d1d';
-            ctx.font = `bold ${12 * scale}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText("卐", 0, 0);
-
-            ctx.restore();
-        }
-
-        // Trigger Rakhi Celebration Event
-        function triggerRakhiCelebration() {
-            isRakhiTied = true;
-            statusText.innerText = "రాఖీ విజయవంతంగా కట్టబడింది! 🎉";
-            wishesCard.classList.remove('hidden');
-            wishesCard.classList.add('flex');
-
-            playCelebrationSound();
-
-            // Confetti Explosion
-            confetti({
-                particleCount: 100,
-                spread: 70,
-                origin: { y: 0.6 }
-            });
-        }
-
-        function resetTieProcess() {
-            isRakhiTied = false;
-            wishesCard.classList.add('hidden');
-            wishesCard.classList.remove('flex');
-            statusText.innerText = "కెమెరాలో మీ చేతిని చూపించండి...";
-        }
-
-        // Process MediaPipe Detection Landmarks
-        function onResults(results) {
-            canvasElement.width = videoElement.videoWidth;
-            canvasElement.height = videoElement.videoHeight;
-
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                // Tracking Primary Hand for Wrist Position
-                const primaryHand = results.multiHandLandmarks[0];
-                const wrist = primaryHand[0];
-                const indexFingerTip = primaryHand[8];
-                const thumbTip = primaryHand[4];
-
-                const wristX = wrist.x * canvasElement.width;
-                const wristY = wrist.y * canvasElement.height;
-
-                // Check distance between index tip and thumb (Pinch Gesture)
-                const pinchDist = Math.hypot(
-                    (indexFingerTip.x - thumbTip.x) * canvasElement.width,
-                    (indexFingerTip.y - thumbTip.y) * canvasElement.height
-                );
-
-                // Distance from pinch center to wrist
-                const pinchCenterX = ((indexFingerTip.x + thumbTip.x) / 2) * canvasElement.width;
-                const pinchCenterY = ((indexFingerTip.y + thumbTip.y) / 2) * canvasElement.height;
-                const distToWrist = Math.hypot(pinchCenterX - wristX, pinchCenterY - wristY);
-
-                // If pinch is made close to wrist, tie the Rakhi
-                if (pinchDist < 45 && distToWrist < 120 && !isRakhiTied) {
-                    triggerRakhiCelebration();
-                }
-
-                // Render Rakhi on Wrist
-                drawRakhi(canvasCtx, wristX, wristY, 1.1, isRakhiTied);
-
-                // Secondary feedback helper
-                if (!isRakhiTied) {
-                    statusText.innerText = "చూపుడు వేలు & బొటనవేలిని రాఖీ దగ్గరకు తెచ్చి కట్టే సైగ చేయండి.";
-                }
-            } else if (!isRakhiTied) {
-                statusText.innerText = "చేతిని కెమెరా ముందు స్పష్టంగా ఉంచండి...";
-            }
-
-            canvasCtx.restore();
-        }
-
-        // Initialize MediaPipe Hands Solution
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    function playTone() {
+      try {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const freqs = [523.25, 659.25, 783.99, 1046.50];
+        freqs.forEach((freq, idx) => {
+          const osc = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, audioContext.currentTime + idx * 0.12);
+          gain.gain.setValueAtTime(0.2, audioContext.currentTime + idx * 0.12);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + idx * 0.12 + 0.6);
+          osc.connect(gain);
+          gain.connect(audioContext.destination);
+          osc.start(audioContext.currentTime + idx * 0.12);
+          osc.stop(audioContext.currentTime + idx * 0.12 + 0.6);
         });
+      } catch (e) {
+        console.error("Audio error:", e);
+      }
+    }
 
-        hands.setOptions({
-            maxNumHands: 2,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.65,
-            minTrackingConfidence: 0.65
+    function triggerCelebration() {
+      isRakhiTied = true;
+      wishesModal.classList.remove('hidden');
+      congratsText.innerText = `${myName} మరియు ${partnerName} ల మధ్య పవిత్రమైన రక్షాబంధన్ రాఖీ విజయవంతంగా కట్టబడింది! ✨`;
+      playTone();
+      confetti({ particleCount: 120, spread: 90, origin: { y: 0.6 } });
+    }
+
+    // Draw Golden Silk Rakhi on Landmark 0 (Wrist)
+    function renderRakhiGraphics(ctx, x, y, scale = 1.0) {
+      ctx.save();
+      ctx.translate(x, y);
+
+      // Red & Gold Threads
+      ctx.beginPath();
+      ctx.moveTo(-120 * scale, 0);
+      ctx.bezierCurveTo(-40 * scale, -12 * scale, 40 * scale, 12 * scale, 120 * scale, 0);
+      ctx.lineWidth = 5 * scale;
+      ctx.strokeStyle = '#dc2626';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-120 * scale, 0);
+      ctx.bezierCurveTo(-40 * scale, 12 * scale, 40 * scale, -12 * scale, 120 * scale, 0);
+      ctx.lineWidth = 3 * scale;
+      ctx.strokeStyle = '#facc15';
+      ctx.stroke();
+
+      // Main Golden Dial
+      ctx.beginPath();
+      ctx.arc(0, 0, 26 * scale, 0, 2 * Math.PI);
+      ctx.fillStyle = '#b91c1c';
+      ctx.fill();
+      ctx.lineWidth = 2.5 * scale;
+      ctx.strokeStyle = '#fef08a';
+      ctx.stroke();
+
+      // Flower Beads
+      for (let i = 0; i < 8; i++) {
+        const angle = (i * 2 * Math.PI) / 8;
+        const px = Math.cos(angle) * (20 * scale);
+        const py = Math.sin(angle) * (20 * scale);
+        ctx.beginPath();
+        ctx.arc(px, py, 6 * scale, 0, 2 * Math.PI);
+        ctx.fillStyle = '#f59e0b';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1 * scale;
+        ctx.stroke();
+      }
+
+      // Center Core
+      ctx.beginPath();
+      ctx.arc(0, 0, 12 * scale, 0, 2 * Math.PI);
+      ctx.fillStyle = '#22c55e';
+      ctx.fill();
+      ctx.lineWidth = 2 * scale;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // MediaPipe Hands Engine
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 0,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    hands.onResults((results) => {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      // Render local video stream
+      if (localVideo.readyState >= 2) {
+        canvasCtx.drawImage(localVideo, 0, 0, canvasElement.width, canvasElement.height);
+      }
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        // Render Landmarks & Connectors
+        for (const landmarks of results.multiHandLandmarks) {
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {
+            color: selectedRole === 'sister' ? '#f59e0b' : '#00ffff',
+            lineWidth: 3
+          });
+          drawLandmarks(canvasCtx, landmarks, {
+            color: '#ef4444',
+            fillColor: '#ffffff',
+            lineWidth: 2,
+            radius: 4
+          });
+        }
+
+        // Brother Mode: If Rakhi is tied, lock and render Rakhi at Wrist (Landmark 0)
+        if (selectedRole === 'brother') {
+          const wrist = results.multiHandLandmarks[0][0];
+          const wx = wrist.x * canvasElement.width;
+          const wy = wrist.y * canvasElement.height;
+
+          if (isRakhiTied) {
+            renderRakhiGraphics(canvasCtx, wx, wy, 1.2);
+            gestureText.innerText = `రాఖీ మీ చేతికి విజయవంతంగా కట్టబడింది! 🪢✨`;
+          } else {
+            gestureText.innerText = "మీ చేతిని కెమెరా ముందు ఉంచండి, సోదరి రాఖీ కడుతున్నారు...";
+          }
+        }
+
+        // Sister Mode: Detect 2 hands with Index & Thumb open, performing circular curve
+        if (selectedRole === 'sister') {
+          if (results.multiHandLandmarks.length >= 2 && !isRakhiTied) {
+            const h1 = results.multiHandLandmarks[0];
+            const h2 = results.multiHandLandmarks[1];
+
+            // Verify only Thumb & Index are actively extended (Pinch / 2-finger frame posture)
+            const h1_indexTip = h1[8], h1_thumbTip = h1[4];
+            const h2_indexTip = h2[8], h2_thumbTip = h2[4];
+
+            const midPointX = ((h1_indexTip.x + h2_indexTip.x) / 2) * canvasElement.width;
+            const midPointY = ((h1_indexTip.y + h2_indexTip.y) / 2) * canvasElement.height;
+
+            // Track movement history to detect circular/curve tying action
+            sisterCurveTracker.push({ x: midPointX, y: midPointY, time: Date.now() });
+            if (sisterCurveTracker.length > 25) sisterCurveTracker.shift();
+
+            if (sisterCurveTracker.length >= 20) {
+              const xs = sisterCurveTracker.map(p => p.x);
+              const ys = sisterCurveTracker.map(p => p.y);
+              const xSpan = Math.max(...xs) - Math.min(...xs);
+              const ySpan = Math.max(...ys) - Math.min(...ys);
+
+              // Circular curve gesture confirmation
+              if (xSpan > 80 && ySpan > 60) {
+                triggerCelebration();
+                if (dataConnection && dataConnection.open) {
+                  dataConnection.send({ type: 'RAKHI_TIED' });
+                }
+              }
+            }
+
+            gestureText.innerText = "రెండు చేతుల చూపుడు & బొటనవేళ్లతో గుండ్రంగా (Circular Curve) కట్టే సైగ చేయండి.";
+            renderRakhiGraphics(canvasCtx, midPointX, midPointY, 0.9);
+          } else if (!isRakhiTied) {
+            gestureText.innerText = "రెండు చేతుల వేళ్లతో రాఖీ పట్టుకుని కట్టే పోజ్ చూపించండి.";
+          }
+        }
+      }
+
+      canvasCtx.restore();
+    });
+
+    // P2P Signaling & Media Setup
+    async function startSession() {
+      myName = document.getElementById('user-name').value.trim();
+      roomCode = document.getElementById('room-code').value.trim().toUpperCase();
+
+      if (!myName || !roomCode) {
+        alert("దయచేసి మీ పేరు మరియు రూమ్ కోడ్ నమోదు చేయండి!");
+        return;
+      }
+
+      lobbyScreen.classList.add('hidden');
+      sessionContainer.classList.remove('hidden');
+
+      // Initialize Camera
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+          audio: false
         });
+        localVideo.srcObject = stream;
+        await localVideo.play();
 
-        hands.onResults(onResults);
-
-        // Webcam Stream Initializer
-        async function initCameraStream() {
-            if (isProcessing) return;
-            startBtn.innerText = "కెమెరా లోడ్ అవుతోంది...";
-            startBtn.disabled = true;
-
-            const camera = new Camera(videoElement, {
-                onFrame: async () => {
-                    await hands.send({ image: videoElement });
-                },
-                width: 1280,
-                height: 720
-            });
-
-            await camera.start();
+        async function processFrame() {
+          if (!isProcessing && localVideo.readyState >= 2) {
             isProcessing = true;
-            startBtn.innerText = "కెమెరా ఆన్‌లో ఉంది";
-            startBtn.classList.add('bg-green-600', 'text-white');
+            await hands.send({ image: localVideo });
+            isProcessing = false;
+          }
+          requestAnimationFrame(processFrame);
         }
-    </script>
+        requestAnimationFrame(processFrame);
+      } catch (err) {
+        console.error("Camera Error:", err);
+        sessionStatus.innerText = "కెమెరా పర్మిషన్ లభించలేదు!";
+        return;
+      }
+
+      // Initialize PeerJS ID Mapping
+      const peerId = `${roomCode}_${selectedRole}`;
+      const targetPeerId = `${roomCode}_${selectedRole === 'sister' ? 'brother' : 'sister'}`;
+
+      peer = new Peer(peerId);
+
+      peer.on('open', (id) => {
+        sessionStatus.innerText = `రూమ్: ${roomCode} | కనెక్ట్ అవుతోంది...`;
+        
+        // If Brother joins, connect to Sister's channel
+        if (selectedRole === 'brother') {
+          setTimeout(() => {
+            const conn = peer.connect(targetPeerId);
+            handleDataConnection(conn);
+          }, 1200);
+        }
+      });
+
+      peer.on('connection', (conn) => {
+        handleDataConnection(conn);
+      });
+
+      peer.on('error', (err) => {
+        console.warn("Peer connection retry:", err);
+        if (selectedRole === 'brother') {
+          setTimeout(() => {
+            const conn = peer.connect(targetPeerId);
+            handleDataConnection(conn);
+          }, 2000);
+        }
+      });
+    }
+
+    function handleDataConnection(conn) {
+      dataConnection = conn;
+      dataConnection.on('open', () => {
+        statusDot.className = "w-3 h-3 rounded-full bg-green-500 animate-pulse";
+        sessionStatus.innerText = `లైవ్ కనెక్షన్ ఏర్పడింది! (${roomCode})`;
+        dataConnection.send({ type: 'HANDSHAKE', name: myName });
+      });
+
+      dataConnection.on('data', (data) => {
+        if (data.type === 'HANDSHAKE') {
+          partnerName = data.name || 'తోబుట్టువు';
+          sessionStatus.innerText = `లైవ్: ${myName} & ${partnerName}`;
+        }
+        if (data.type === 'RAKHI_TIED') {
+          triggerCelebration();
+        }
+      });
+    }
+
+    function endSession() {
+      if (peer) peer.destroy();
+      location.reload();
+    }
+  </script>
 </body>
 </html>
